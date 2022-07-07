@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style></style>
+  </head>
+  <body>
+    <center>
+      <h1>Force Network Diagram</h1>
+
+      <svg></svg>
+    </center>
+    <div class="tooltip"></div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.js"></script>
+
+    <script>
+      let width = 1000,
+        height = 800
+
+      let svg = d3.select('svg').attr('width', width).attr('height', height)
+
+      Promise.all([
+        d3.json('links-sample.json'),
+        d3.json('cases-sample.json'),
+      ]).then((data) => {
+        // Data preprocessing
+        data[0].forEach((e) => {
+          e.source = e.infector
+          e.target = e.infectee
+        })
+
+        console.log(data[0]) //links
+        console.log(data[1]) //case
+
+        let colorScale = d3
+          .scaleOrdinal()
+          .domain(['m', 'f'])
+          .range(['blue', 'red'])
+
+        // Define tooltip
+        var tooltip = d3
+          .select('.tooltip')
+          .style('background-color', 'black')
+          .style('position', 'absolute')
+          .style('visibility', 'hidden')
+          .style('font-size', '15px')
+          .style('color', 'white')
+          .style('padding', '5px')
+
+        let xPosition = d3
+          .scaleOrdinal()
+          .domain([0, 1, 2])
+          .range([500, 200, 650])
+
+        let linkpath = svg
+          .append('g')
+          .attr('id', 'links')
+          .selectAll('path')
+          .data(data[0])
+          .enter()
+          .append('path')
+          .attr('fill', 'none')
+          .attr('stroke', 'black')
+
+        let node = svg
+          .append('g')
+          .attr('id', 'nodes')
+          .selectAll('circle')
+          .data(data[1])
+          .enter()
+          .append('circle')
+          .attr('r', 20)
+          .style('fill', (d) => {
+            if (d.gender == 'male') return colorScale('m')
+            else return colorScale('f')
+          })
+          .on('mouseover', function (event, d) {
+            tooltip
+              .transition()
+              .duration(100)
+              .style('visibility', 'visible')
+              .style('opacity', 5)
+            d3.select(this)
+              .style('stroke', 'black')
+              .style('stroke-width', 3)
+              .style('opacity', 1)
+
+            tooltip
+              .html(
+                'Id: ' +
+                  d.id +
+                  '<br>' +
+                  'Age: ' +
+                  d.age +
+                  '<br>' +
+                  'Nationality: ' +
+                  d.nationality +
+                  '<br>' +
+                  'Occupation: ' +
+                  d.occupation +
+                  '<br>' +
+                  'Organization: ' +
+                  d.organization +
+                  '<br>' +
+                  'Date: ' +
+                  d.date +
+                  '<br>' +
+                  'Vaccination: ' +
+                  d.vaccinated +
+                  '<br>'
+              )
+              .style('top', event.pageY + 'px')
+              .style('left', event.pageX + 'px')
+          })
+          .on('mouseleave', function (event, d) {
+            tooltip.transition().duration(100).style('visibility', 'hidden')
+            d3.select(this).style('stroke', 'none').style('opacity', 1)
+          })
+
+          .call(
+            d3
+              .drag()
+              .on('start', dragstarted)
+              .on('drag', dragged)
+              .on('end', dragended)
+          )
+
+        // binding the data to the simulation
+        let simulation = d3
+          .forceSimulation()
+          .nodes(data[1])
+          .force(
+            'x',
+            d3
+              .forceX()
+              .strength(0.1)
+              .x((d) => xPosition(d.class))
+          )
+          .force(
+            'y',
+            d3
+              .forceY()
+              .strength(0.1)
+              .y(height / 2)
+          )
+          // collide - prevent overlapping
+          // charge - distance between each nodes
+          .force('charge', d3.forceManyBody().strength(-500))
+          .force('collide', d3.forceCollide().strength(0.1).radius(30))
+          .force(
+            'link',
+            d3
+              .forceLink(data[0])
+              .id((d) => d.id)
+              .distance(100)
+              .strength(0.5)
+          )
+          .on('tick', (d) => {
+            node.attr('cx', (d) => d.x).attr('cy', (d) => d.y)
+            linkpath
+              // .attr("d", d => "M" + d.source.x + "," + d.source.y + " " + d.target.x + "," + d.target.y);
+              // making the arrows curved
+              .attr('d', (d) => {
+                var dx = d.target.x - d.source.x,
+                  dy = d.target.y - d.source.y,
+                  dr = Math.sqrt(dx * dx + dy * dy)
+                return (
+                  'M' +
+                  d.source.x +
+                  ',' +
+                  d.source.y +
+                  'A' +
+                  dr +
+                  ',' +
+                  dr +
+                  ' 0 0,1 ' +
+                  ' ' +
+                  d.target.x +
+                  ',' +
+                  d.target.y
+                )
+              })
+          })
+
+        function dragstarted(event, d) {
+          if (!event.active) simulation.alphaTarget(0.3).restart()
+          d.fx = d.x
+          d.fy = d.y
+        }
+
+        function dragged(event, d) {
+          d.fx = event.x
+          d.fy = event.y
+        }
+
+        function dragended(event, d) {
+          if (!event.active) simulation.alphaTarget(0)
+          d.fx = null
+          d.fy = null
+        }
+
+        var legend = d3
+          .legendColor()
+          .labels(['M', 'F'])
+          .scale(colorScale)
+          .shapeWidth(10)
+          .orient('vertical')
+          .title('Gender')
+        svg.append('g').attr('transform', 'translate(0,400)').call(legend)
+      })
+    </script>
+  </body>
+</html>
